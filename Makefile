@@ -15,3 +15,8 @@ prod-smoke:
 # Быстрая проверка живости API через nginx
 prod-check:
 	curl -fsS http://127.0.0.1/health && echo "\nOK: API is healthy"
+.PHONY: test-integration
+test-integration:
+	docker compose -f docker-compose.prod.yml up -d --build
+	docker compose -f docker-compose.prod.yml run --rm tests
+	docker compose -f docker-compose.prod.yml down
