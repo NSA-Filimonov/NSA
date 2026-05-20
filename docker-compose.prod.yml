@@ -61,4 +61,4 @@ services:
         condition: service_healthy
       nginx:
         condition: service_started
-    command: ["python", "-m", "pytest", "-m", "integration", "-q"]
+    command: ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "integration", "tests/integration"]
