@@ -4,23 +4,29 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
 jobs:
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Show Docker info
+        uses: actions/checkout@v5
+      - name: Debug workspace
+        run: |
+          pwd
+          ls -la
+          git rev-parse --short HEAD
+          echo "--- Makefile targets ---"
+          make -pn | grep -E "^ci-test:|^test-integration:|^\.PHONY" || true
+      - name: Show Docker versions
         run: |
           docker --version
           docker compose version
       - name: Build and start stack
         run: docker compose -f docker-compose.prod.yml up -d --build
       - name: Run integration tests
-        run: make test-integration
+        run: make ci-test
       - name: Dump logs on failure
         if: failure()
         run: docker compose -f docker-compose.prod.yml logs --no-color
