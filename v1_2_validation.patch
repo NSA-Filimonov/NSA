@@ -1,0 +1,233 @@
+diff –git a/app/routers/setup.py b/app/routers/setup.py
+index 0f1e2d3..4a5b6c7 100644
+— a/app/routers/setup.py
++++ b/app/routers/setup.py
+@@ -1,12 +1,11 @@
+import json
+import os
+-import re
+from typing import Literal
+from uuid import uuid4
+
+import redis.asyncio as redis
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
++from app.core.validation import parse_grid_size, validate_steps, validate_user_id
+
+router = APIRouter()
+
+@@ -36,27 +35,6 @@ def _k_setup(session_id: str) -> str:
+def _k_secret(user_id: str) -> str:
+return f”nsa:secret:{user_id}”
+
+-
+-def _parse_grid_size(grid_size: str) -> tuple[int, int]:
+- r, c = grid_size.lower().split(“x”)
+- return int®, int©
+
+-
+-def _validate_cell(cell: str, rows: int, cols: int) -> bool:
+- # Формат A1, B2 …
+- if not re.fullmatch(r”[A-Z][1-9]\d*“, cell):
+- return False
+- row_letter = cell[0]
+- col_num = int(cell[1:])
+- row_idx = ord(row_letter) - ord(“A”)
+- col_idx = col_num - 1
+- return 0 <= row_idx < rows and 0 <= col_idx < cols
+
+-
+@router.post(“/setup/start”, response_model=SetupStartResponse)
+async def setup_start(payload: SetupStartRequest):
++ user_id = validate_user_id(payload.user_id)
+session_id = str(uuid4())
+- value = {“user_id”: payload.user_id}
++ value = {“user_id”: user_id}
+await redis_client.set(_k_setup(session_id), json.dumps(value), ex=SETUP_TTL_SEC)
+return SetupStartResponse(setup_session_id=session_id)
+
+@@ -64,24 +42,22 @@ async def setup_start(payload: SetupStartRequest):
+@router.post(“/setup/secret”, response_model=SetupSecretResponse)
+async def setup_secret(payload: SetupSecretRequest):
++ user_id = validate_user_id(payload.user_id)
++
+raw = await redis_client.get(_k_setup(payload.setup_session_id))
+if not raw:
+raise HTTPException(status_code=400, detail=“invalid_setup_session”)
+
+ setup_data = json.loads(raw)
+
+    if setup_data.get(“user_id”) != payload.user_id:
+
+    if setup_data.get(“user_id”) != user_id:
+    raise HTTPException(status_code=400, detail=“invalid_setup_session”)
+
+    rows, cols = _parse_grid_size(payload.grid_size)
+
+    if not payload.steps:
+    raise HTTPException(status_code=400, detail=“steps_required”)
+
+    for step in payload.steps:
+
+    if not _validate_cell(step.cell_a, rows, cols) or not _validate_cell(step.cell_b, rows, cols):
+
+    raise HTTPException(status_code=400, detail=“invalid_cell_reference”)
+
+    rows, cols = parse_grid_size(payload.grid_size)
+
+    normalized_steps = validate_steps([s.dict() for s in payload.steps], rows, cols)
+
+    secret_profile = {
+    “grid_size”: payload.grid_size,
+
+    “steps”: [s.model_dump() for s in payload.steps],
+
+    “steps”: normalized_steps,
+    }
+
+    # upsert секрета пользователя
+
+    await redis_client.set(_k_secret(payload.user_id), json.dumps(secret_profile))
+
+    await redis_client.set(_k_secret(user_id), json.dumps(secret_profile))
+
+    # setup session одноразовая
+    await redis_client.delete(_k_setup(payload.setup_session_id))
+    diff –git a/app/routers/auth.py b/app/routers/auth.py
+    index 7f8e9d0..1a2b3c4 100644
+    — a/app/routers/auth.py
+    +++ b/app/routers/auth.py
+    @@ -1,11 +1,17 @@
+    import json
+    import os
+    import random
+    -import re
+    from typing import Literal
+    from uuid import uuid4
+
+import redis.asyncio as redis
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
++from app.core.validation import (
++ cell_to_idx,
++ parse_grid_size,
++ validate_context,
++ validate_response_digits,
++ validate_steps,
++ validate_user_id,
++)
+
+router = APIRouter()
+
+@@ -48,22 +54,6 @@ def _k_lock(user_id: str) -> str:
+return f”nsa:lock:{user_id}”
+
+-def _parse_grid_size(grid_size: str) -> tuple[int, int]:
+- r, c = grid_size.lower().split(“x”)
+- return int®, int©
+
+-
+-def _cell_to_idx(cell: str) -> tuple[int, int]:
+- if not re.fullmatch(r”[A-Z][1-9]\d*“, cell):
+- raise ValueError(“invalid_cell”)
+- row = ord(cell[0]) - ord(“A”)
+- col = int(cell[1:]) - 1
+- return row, col
+
+-
+def _eval_step(a: int, op: str, b: int) -> int:
+if op == “+”:
+return a + b
+@@ -80,8 +70,8 @@ def _compute_expected_response(grid: list[list[int]], steps: list[dict]) -> str:
+cols = len(grid[0]) if rows else 0
+
+ for s in steps:
+
+    ra, ca = _cell_to_idx(s[“cell_a”])
+    rb, cb = _cell_to_idx(s[“cell_b”])
+    ra, ca = cell_to_idx(s[“cell_a”])
+    rb, cb = cell_to_idx(s[“cell_b”])
+    if ra >= rows or rb >= rows or ca >= cols or cb >= cols:
+    raise ValueError(“invalid_cell_bounds”)
+    val = _eval_step(grid[ra][ca], s[“op”], grid[rb][cb])
+    @@ -95,15 +85,20 @@ def _compute_expected_response(grid: list[list[int]], steps: list[dict]) -> str:
+
+@router.post(“/challenge/create”, response_model=ChallengeCreateResponse)
+async def challenge_create(payload: ChallengeCreateRequest):
+- raw_secret = await redis_client.get(_k_secret(payload.user_id))
++ user_id = validate_user_id(payload.user_id)
++ _ = validate_context(payload.context)
++
++ raw_secret = await redis_client.get(_k_secret(user_id))
+if not raw_secret:
+raise HTTPException(status_code=400, detail=“secret_not_configured”)
+
+ secret = json.loads(raw_secret)
+
+    rows, cols = _parse_grid_size(secret[“grid_size”])
+
+    rows, cols = parse_grid_size(secret[“grid_size”])
+
+    normalized_steps = validate_steps(secret[“steps”], rows, cols)
+    +
+    grid = [[random.randint(1, 9) for _ in range(cols)] for _ in range(rows)]
+
+    try:
+
+    expected_response = _compute_expected_response(grid, secret[“steps”])
+
+    expected_response = _compute_expected_response(grid, normalized_steps)
+    except ValueError as e:
+    raise HTTPException(status_code=400, detail=str(e))
+
+@@ -111,7 +106,7 @@ async def challenge_create(payload: ChallengeCreateRequest):
+challenge_id = str(uuid4())
+challenge_payload = {
+- “user_id”: payload.user_id,
++ “user_id”: user_id,
+“expected_response”: expected_response,
+}
+
+@@ -132,12 +127,12 @@ async def challenge_create(payload: ChallengeCreateRequest):
+
+@router.post(“/challenge/verify”, response_model=ChallengeVerifyResponse)
+async def challenge_verify(payload: ChallengeVerifyRequest):
+- if not payload.response.isdigit():
+- raise HTTPException(status_code=400, detail=“response_digits_only”)
++ user_id = validate_user_id(payload.user_id)
++ response = validate_response_digits(payload.response)
+
+    lock_ttl = await redis_client.ttl(_k_lock(payload.user_id))
+
+    lock_ttl = await redis_client.ttl(_k_lock(user_id))
+    if lock_ttl and lock_ttl > 0:
+    return ChallengeVerifyResponse(
+    result=“locked”,
+    reason=“user_locked”,
+    lock_remaining_sec=lock_ttl,
+    )
+    @@ -149,7 +144,7 @@ async def challenge_verify(payload: ChallengeVerifyRequest):
+
+    challenge = json.loads(raw_challenge)
+
+    if challenge.get(“user_id”) != payload.user_id:
+
+    if challenge.get(“user_id”) != user_id:
+    return ChallengeVerifyResponse(
+    result=“failed”,
+    reason=“challenge_user_mismatch”,
+    )
+    @@ -157,17 +152,17 @@ async def challenge_verify(payload: ChallengeVerifyRequest):
+    expected = str(challenge[“expected_response”])
+
+    if payload.response == expected:
+
+    await redis_client.delete(_k_fail(payload.user_id))
+
+    if response == expected:
+
+    await redis_client.delete(_k_fail(user_id))
+    return ChallengeVerifyResponse(result=“success”)
+
+    fails = await redis_client.incr(_k_fail(payload.user_id))
+    <
