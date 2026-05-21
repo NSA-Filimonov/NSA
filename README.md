@@ -20,6 +20,8 @@
 ---
 ## EN
 ### Overview
+[![CI Integration](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?branch=main)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml)
+#
 NSA Backend is a FastAPI + Redis service that implements a challenge/verify flow with temporary lockout policy and smoke-tested production compose setup.
 Current release status:
 - ✅ Redis-backed state
