@@ -20,8 +20,39 @@
 ---
 ## EN
 ### Overview
+## Status
+[![CI (main)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?branch=main&event=push)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml?query=branch%3Amain)
+[![CI (pull request)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?event=pull_request)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml?query=event%3Apull_request)
 [![CI Integration](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?branch=main)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml)
-#
+En markdown## CI/CD
+The project uses the GitHub Actions workflow `ci-integration.yml`.
+
+### What the pipeline does
+- Builds the Docker environment (`docker-compose.prod.yml`)
+- Spins up services (`redis`, `api`, `nginx`)
+- Runs integration tests (`pytest -m integration`)
+- Saves the JUnit report (`test-results/junit.xml`) as an artifact
+- Dumps container logs on failure
+- Performs a teardown (`docker compose down -v --remove-orphans`)
+
+### Triggers
+- `push` to `main`
+- `pull_request` to `main`
+- Manual trigger (`workflow_dispatch`)
+Ru ## CI/CD
+Проект использует GitHub Actions workflow `ci-integration.yml`.
+### Что делает pipeline
+- Собирает Docker-окружение (`docker-compose.prod.yml`)
+- Поднимает сервисы (`redis`, `api`, `nginx`)
+- Запускает интеграционные тесты (`pytest -m integration`)
+- Сохраняет JUnit-отчёт (`test-results/junit.xml`) как artifact
+- На ошибке выводит логи контейнеров
+- Выполняет teardown (`docker compose down -v --remove-orphans`)
+### Когда запускается
+- `push` в `main`
+- `pull_request` в `main`
+- вручную (`workflow_dispatch`)
+## #
 NSA Backend is a FastAPI + Redis service that implements a challenge/verify flow with temporary lockout policy and smoke-tested production compose setup.
 Current release status:
 - ✅ Redis-backed state
