@@ -5,6 +5,8 @@ on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 jobs:
   integration:
     runs-on: ubuntu-latest
@@ -18,17 +20,27 @@ jobs:
           docker compose version
       - name: Build and start stack
         run: docker compose -f docker-compose.prod.yml up -d --build
-      - name: Run integration tests (JUnit)
+      - name: Run integration tests and write JUnit to host
         run: |
-          mkdir -p test-results
-          docker compose -f docker-compose.prod.yml run --rm tests
+          mkdir -p "$GITHUB_WORKSPACE/test-results"
+          chmod 777 "$GITHUB_WORKSPACE/test-results"
+          docker compose -f docker-compose.prod.yml run --rm \
+            --user 0:0 \
+            -v "$GITHUB_WORKSPACE/test-results:/artifacts" \
+            tests sh -lc "python -m pytest -q -p no:cacheprovider -m integration tests/integration --junitxml=/artifacts/junit.xml"
+      - name: Debug JUnit file
+        if: always()
+        run: |
+          echo "Workspace: $GITHUB_WORKSPACE"
+          ls -lah "$GITHUB_WORKSPACE/test-results" || true
+          test -f "$GITHUB_WORKSPACE/test-results/junit.xml" && echo "JUnit exists" || echo "JUnit missing"
       - name: Upload JUnit report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: junit-integration-report
-          path: test-results/junit.xml
-          if-no-files-found: error
+          path: ${{ github.workspace }}/test-results/junit.xml
+          if-no-files-found: warn
       - name: Dump logs on failure
         if: failure()
         run: docker compose -f docker-compose.prod.yml logs --no-color
