@@ -23,8 +23,9 @@
 ## Status
 [![CI (main)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?branch=main&event=push)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml?query=branch%3Amain)
 [![CI (pull request)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?event=pull_request)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml?query=event%3Apull_request)
-[![CI Integration](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?branch=main)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml)
-En markdown## CI/CD
+[![Coverage](https://codecov.io/gh/NSA-Filimonov/NSA/branch/main/graph/badge.svg)](https://codecov.io/gh/NSA-Filimonov/NSA)
+## CI/CD
+markdown## CI/CD
 The project uses the GitHub Actions workflow `ci-integration.yml`.
 
 ### What the pipeline does
@@ -39,19 +40,23 @@ The project uses the GitHub Actions workflow `ci-integration.yml`.
 - `push` to `main`
 - `pull_request` to `main`
 - Manual trigger (`workflow_dispatch`)
-Ru ## CI/CD
-Проект использует GitHub Actions workflow `ci-integration.yml`.
+Проект использует GitHub Actions workflow: `.github/workflows/ci-integration.yml`.
 ### Что делает pipeline
-- Собирает Docker-окружение (`docker-compose.prod.yml`)
+- Собирает Docker-окружение на базе `docker-compose.prod.yml`
 - Поднимает сервисы (`redis`, `api`, `nginx`)
 - Запускает интеграционные тесты (`pytest -m integration`)
-- Сохраняет JUnit-отчёт (`test-results/junit.xml`) как artifact
-- На ошибке выводит логи контейнеров
-- Выполняет teardown (`docker compose down -v --remove-orphans`)
+- Формирует JUnit-отчёт (`test-results/junit.xml`) и публикует его как artifact
+- При падении тестов сохраняет логи контейнеров
+- Выполняет очистку окружения (`docker compose down -v --remove-orphans`)
 ### Когда запускается
-- `push` в `main`
-- `pull_request` в `main`
-- вручную (`workflow_dispatch`)
+- При `push` в ветку `main`
+- При `pull_request` в ветку `main`
+- Вручную через `workflow_dispatch`
+### Артефакты
+- `junit-integration-report` — XML-отчёт тестов в формате JUnit
+### Покрытие тестов
+Для бейджа покрытия используется Codecov.
+Pipeline генерирует `coverage.xml` и отправляет его в Codecov, после чего бейдж обновляется автоматически.
 ## #
 NSA Backend is a FastAPI + Redis service that implements a challenge/verify flow with temporary lockout policy and smoke-tested production compose setup.
 Current release status:
