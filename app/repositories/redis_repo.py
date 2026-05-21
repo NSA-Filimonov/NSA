@@ -16,12 +16,38 @@ import json
 import os
 from typing import Any
 from redis import Redis
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+def _build_redis_url() -> str:
+    # Приоритет: явный REDIS_URL
+    explicit = os.getenv("REDIS_URL")
+    if explicit:
+        return explicit
+    # Иначе собираем из host/port/db
+    host = os.getenv("REDIS_HOST", "redis")
+    port = os.getenv("REDIS_PORT", "6379")
+    db = os.getenv("REDIS_DB", "0")
+    return f"redis://{host}:{port}/{db}"
 class RedisRepo:
-    def __init__(self):
-        self.r = Redis.from_url(REDIS_URL, decode_responses=True)
-        self._load_scripts()
+    def __init__(self, redis_url: str | None = None):
+        self._redis_url_override = redis_url
+        self.r: Redis | None = None
+        self.consume_challenge_lua = None
+        self.fail_counter_lua = None
+        self.success_reset_lua = None
+    def _get_url(self) -> str:
+        return self._redis_url_override or _build_redis_url()
+    def _ensure_client(self) -> None:
+        if self.r is None:
+            self.r = Redis.from_url(self._get_url(), decode_responses=True)
+            self._load_scripts()
+    def reconnect(self) -> None:
+        """Принудительно пересоздать соединение по текущим env."""
+        self.r = None
+        self.consume_challenge_lua = None
+        self.fail_counter_lua = None
+        self.success_reset_lua = None
+        self._ensure_client()
     def _load_scripts(self):
+        self._ensure_client()
         # consume challenge atomically: missing/used/expired/ok
         self.consume_challenge_lua = self.r.register_script(
             """
@@ -93,17 +119,23 @@ class RedisRepo:
             """
         )
     @staticmethod
-    def k_setup(sid: str) -> str: return f"nsa:setup:{sid}"
+    def k_setup(sid: str) -> str:
+        return f"nsa:setup:{sid}"
     @staticmethod
-    def k_secret(uid: str) -> str: return f"nsa:secret:{uid}"
+    def k_secret(uid: str) -> str:
+        return f"nsa:secret:{uid}"
     @staticmethod
-    def k_state(uid: str) -> str: return f"nsa:state:{uid}"
+    def k_state(uid: str) -> str:
+        return f"nsa:state:{uid}"
     @staticmethod
-    def k_challenge(cid: str) -> str: return f"nsa:challenge:{cid}"
+    def k_challenge(cid: str) -> str:
+        return f"nsa:challenge:{cid}"
     def json_set(self, key: str, value: Any, ex: int | None = None):
+        self._ensure_client()
         data = json.dumps(value, ensure_ascii=False)
         self.r.set(key, data, ex=ex)
     def json_get(self, key: str, default: Any):
+        self._ensure_client()
         raw = self.r.get(key)
         return default if raw is None else json.loads(raw)
 repo = RedisRepo()
