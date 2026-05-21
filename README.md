@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # NSA
+[![CI Integration](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?branch=main)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml)
 #New System Autentification. Software for replacing passwords, PINs, and patterns.
 #
 #
@@ -20,10 +21,6 @@
 ---
 ## EN
 ### Overview
-## Status
-[![CI (main)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?branch=main&event=push)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml?query=branch%3Amain)
-[![CI (pull request)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml/badge.svg?event=pull_request)](https://github.com/NSA-Filimonov/NSA/actions/workflows/ci-integration.yml?query=event%3Apull_request)
-[![Coverage](https://codecov.io/gh/NSA-Filimonov/NSA/branch/main/graph/badge.svg)](https://codecov.io/gh/NSA-Filimonov/NSA)
 ## CI/CD
 markdown## CI/CD
 The project uses the GitHub Actions workflow `ci-integration.yml`.
